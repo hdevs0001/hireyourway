@@ -10,6 +10,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   return {
     adapter: NeonAdapter(pool),
-    providers: [Google],
+    providers: [
+      Google({
+        authorization: {
+          params: {
+            prompt: "select_account",
+          },
+        },
+      }),
+    ],
   };
 });

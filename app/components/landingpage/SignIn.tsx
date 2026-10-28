@@ -6,15 +6,9 @@ export default function SignIn() {
   return (
     <button
       onClick={() =>
-        signIn(
-          "google",
-          {
-            redirectTo: "/dashboard",
-          },
-          {
-            prompt: "select_account",
-          },
-        )
+        signIn("google", {
+          redirectTo: "/dashboard",
+        })
       }
     >
       SignIn
