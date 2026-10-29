@@ -10,6 +10,7 @@ export default function SignIn() {
           redirectTo: "/dashboard",
         })
       }
+      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
     >
       SignIn
     </button>

@@ -11,10 +11,12 @@ thats it .
 that is the reason of using these technology.
 
 # next steps is 
-1. do the authenication (using OAuth)
+1. do the authenication (using OAuth)(done for the dashboard)
 2. then make two authencation using OAuth (IYKYK).
 3. after that make the whole form where user see the jobs , then get the signin ,then fill the form done.
 4. make the dashboard .
 5. add the middleware and make the route protected.
 
 that all for now
+# now is the two authencation for form and other again
+1. make other auth for the form and job 
