@@ -1,18 +1,14 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { dashboardSignIn } from "@/DashAuth/action";
 
 export default function SignIn() {
   return (
     <button
-      onClick={() =>
-        signIn("google", {
-          redirectTo: "/dashboard",
-        })
-      }
+      onClick={() => dashboardSignIn()}
       className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
     >
-      SignIn
+      Sign In with Google
     </button>
   );
 }
