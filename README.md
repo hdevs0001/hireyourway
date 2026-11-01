@@ -1,4 +1,4 @@
-created the next app . 
+created the next app . (i will fix the readme at the end (sorry for now))
 tech using is :
 next.js , shadcn UI(component library),redis(for making the bridge token),bullMQ(for the blowjob(async work ) )
 neon for the database 
@@ -24,3 +24,7 @@ that all for now
 1. create the form (that it )
 # next step after form is to create the dashboard. 
 # after dash i want to create the redis and BULLMQ combo to make the bridge token and use it for the job filling auth 
+
+
+# 1. CREATE THE WIDGET FIRST 
+and the embedding 
