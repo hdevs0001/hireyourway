@@ -67,14 +67,16 @@ model User {
 }
 
 model Company {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   companyName String
   email       String
   address     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   user        User[]
   widgets     Widget[]
+  candidates  Candidate[]
+  jobs        Job[]
 }
 
 model Widget {
@@ -90,3 +92,23 @@ model Widget {
   updatedAt      DateTime @updatedAt
 }
 
+// this is for the form that the user will fill 
+model Candidate {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  phone     String?
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
