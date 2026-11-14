@@ -23,7 +23,7 @@ model VerificationToken {
 
 model Account {
   id                Int     @id @default(autoincrement())
-  userId            Int
+  userId            String
   type              String  @db.VarChar(255)
   provider          String  @db.VarChar(255)
   providerAccountId String  @db.VarChar(255)
@@ -42,7 +42,7 @@ model Account {
 
 model Session {
   id           Int      @id @default(autoincrement())
-  userId       Int
+  userId       String
   expires      DateTime @db.Timestamptz
   sessionToken String   @unique @db.VarChar(255)
 
@@ -52,7 +52,7 @@ model Session {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
+  id            String    @id @default(cuid())
   name          String?   @db.VarChar(255)
   email         String?   @unique @db.VarChar(255)
   emailVerified DateTime? @db.Timestamptz
