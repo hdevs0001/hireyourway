@@ -25,6 +25,7 @@ async function DashboardContent() {
 
       <h2>Welcome, {session.user.name ?? "User"}</h2>
       <p>Email: {session.user.email ?? "Not available"}</p>
+      
       <div className="mt-6">
         <LogoutButton />
       </div>
