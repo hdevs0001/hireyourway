@@ -162,7 +162,7 @@ export default function App({ widgetId }: AppProps) {
               </div>
             ) : (
               <iframe
-                title="HireflowAI Application Form"
+                title="HireYourWay Application Form"
                 src={`${process.env.HIRE_YOUR_WAY}/embeddingwidget/jobs?widgetId=${encodeURIComponent(widgetId)}&parentOrigin=${encodeURIComponent(window.location.origin)}`}
                 style={{ width: "100%", height: "100%", border: "none" }}
               />
