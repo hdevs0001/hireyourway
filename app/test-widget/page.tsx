@@ -22,10 +22,10 @@ export default function TestWidget() {
       {/* Safely render the origin only after it is captured */}
       {origin && <h1 style={{ color: "#2563eb" }}>Origin: {origin}</h1>}
 
-      <div id="hireflow-widget"></div>
+      <div id="hireyourway-widget"></div>
 
       <Script
-        src="http://localhost:3000/widget.js"
+        src="http://localhost:3000/index.global.js"
         data-widget-id="cmspy0fix0006sztwxvi0h3wy"
       />
     </div>

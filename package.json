@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:widget":"tsup"
   },
   "dependencies": {
     "@auth/neon-adapter": "^1.11.3",
@@ -30,6 +31,7 @@
     "eslint-config-next": "16.4.3",
     "prisma": "^7.10.1",
     "tailwindcss": "^4",
+    "tsup": "^9.0.0",
     "typescript": "^5"
   }
 }

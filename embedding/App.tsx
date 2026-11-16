@@ -11,7 +11,7 @@ export default function App({ widgetId }: AppProps) {
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       // Only accept messages from HireflowAI
-      if (event.origin !== process.env.HIRE_YOUR_WAY) {
+      if (event.origin !== import.meta.env.VITE_HIRE_YOUR_WAY) {
         return;
       }
 
@@ -163,7 +163,7 @@ export default function App({ widgetId }: AppProps) {
             ) : (
               <iframe
                 title="HireYourWay Application Form"
-                src={`${process.env.HIRE_YOUR_WAY}/embeddingwidget/jobs?widgetId=${encodeURIComponent(widgetId)}&parentOrigin=${encodeURIComponent(window.location.origin)}`}
+                src={`${import.meta.env.VITE_HIRE_YOUR_WAY}/embeddingwidget/job?widgetId=${encodeURIComponent(widgetId)}&parentOrigin=${encodeURIComponent(window.location.origin)}`}
                 style={{ width: "100%", height: "100%", border: "none" }}
               />
             )}
