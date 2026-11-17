@@ -16,7 +16,7 @@ export default function TestWidget() {
       <h1>
         Testing HireFlow Widget
         <br />
-        cmspy0fix0006sztwxvi0h3wy
+        8995ac32-7374-489e-a8fa-9b1b4b45b823
       </h1>
 
       {/* Safely render the origin only after it is captured */}
@@ -26,7 +26,7 @@ export default function TestWidget() {
 
       <Script
         src="http://localhost:3000/index.global.js"
-        data-widget-id="cmspy0fix0006sztwxvi0h3wy"
+        data-widget-id="8995ac32-7374-489e-a8fa-9b1b4b45b823"
       />
     </div>
   );
