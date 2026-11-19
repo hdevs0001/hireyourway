@@ -12,11 +12,11 @@ export interface CandidateSessionData {
   candidateId?: string;
 }
 
-function sessionKey(sessionId: string) {
+export function sessionKey(sessionId: string) {
   return `candidate-session:${sessionId}`;
 }
 
-function bridgeKey(token: string) {
+export function bridgeKey(token: string) {
   return `bridge:${token}`;
 }
 // this function is used to create the session for the user .
