@@ -1,4 +1,5 @@
-import { auth } from "@/lib/auth.candidate";
+
+import { auth } from "@/FormAuth/auth";
 import {
   getCandidateSession,
   markCandidateSessionVerified,
@@ -7,76 +8,136 @@ import {
 import { prisma } from "@/lib/prisma";
 import { CompleteClient } from "./complete-client";
 
+export const instant = false;
+
 export default async function CompletePage({
   searchParams,
 }: {
-  searchParams: Promise<{ widgetId?: string; sessionId?: string }>;
+  searchParams: Promise<{
+    widgetId?: string;
+    sessionId?: string;
+  }>;
 }) {
   const { widgetId, sessionId } = await searchParams;
 
   if (!widgetId || !sessionId) {
-    return <p style={{ padding: 24 }}>Missing session information.</p>;
-  }
-
-  const session = await auth();
-  if (!session?.candidate?.email) {
     return (
       <p style={{ padding: 24 }}>
-        Authentication failed. You can close this window.
+        Missing session information.
       </p>
     );
   }
 
-  const redisSession = await getCandidateSession(sessionId);
-  if (!redisSession) {
-    return <p style={{ padding: 24 }}>Session expired. Please try again.</p>;
+  // 1. Get authenticated Google user
+const session = await auth();
+const user = session?.user;
+
+const candidateEmail = user?.email;
+
+if (!user || !candidateEmail) {
+  return (
+    <p style={{ padding: 24 }}>
+      Authentication failed. You can close this window.
+    </p>
+  );
+}
+
+  // 2. Retrieve Google account information
+  const googleAccount = await prisma.account.findFirst({
+    where: {
+      provider: "google",
+      user: {
+        is: {
+          email: candidateEmail,
+        },
+      },
+    },
+    select: {
+      providerAccountId: true,
+    },
+  });
+
+  if (!googleAccount) {
+    return (
+      <p style={{ padding: 24 }}>
+        Google account information not found. Please sign in again.
+      </p>
+    );
   }
+
+  const googleSub = googleAccount.providerAccountId;
+
+  // 3. Retrieve Redis candidate session
+const redisSession = await getCandidateSession(sessionId);
+
+console.log("REDIS SESSION DEBUG:", {
+  sessionId,
+  redisSession,
+  found: !!redisSession,
+});
+
+if (!redisSession) {
+  return <p>Redis session not found.</p>;
+}
 
   const { companyId } = redisSession;
 
+  // 4. Create or update candidate
   const candidate = await prisma.candidate.upsert({
     where: {
       companyId_email: {
         companyId,
-        email: session.candidate.email,
+        email: candidateEmail,
       },
     },
     update: {
-      googleSub: session.candidate.googleSub,
+      googleSub,
+      name: user.name ?? candidateEmail,
+      image: user.image ?? null,
     },
     create: {
       companyId,
-      email: session.candidate.email,
-      googleSub: session.candidate.googleSub,
-      name: session.candidate.name ?? session.candidate.email,
-      image: session.candidate.image ?? null,
+      email: candidateEmail,
+      googleSub,
+      name: user.name ?? candidateEmail,
+      image: user.image ?? null,
     },
   });
 
-  const updated = await markCandidateSessionVerified(sessionId, {
-    candidateId: candidate.id,
-    googleSub: session.candidate.googleSub,
-    email: session.candidate.email,
-  });
+  // 5. Mark Redis session as verified
+const updated = await markCandidateSessionVerified(sessionId, {
+  candidateId: candidate.id,
+  googleSub,
+  email: candidateEmail,
+});
 
-  if (!updated) {
-    return <p style={{ padding: 24 }}>Session expired. Please try again.</p>;
-  }
+console.log("REDIS VERIFICATION DEBUG:", {
+  sessionId,
+  updated,
+});
 
+if (!updated) {
+  return <p>Redis verification failed.</p>;
+}
+
+  // 6. Generate bridge token
   const bridgeToken = await issueBridgeToken(sessionId);
+
   if (!bridgeToken) {
     return (
       <p style={{ padding: 24 }}>
-        This sign-in link has already been used. Please close this window and
-        try again.
+        This sign-in link has already been used.
+        Please close this window and try again.
       </p>
     );
   }
+
+  // 7. Render completion client
   return (
     <CompleteClient
       widgetId={widgetId}
       bridgeToken={bridgeToken}
-      candidateEmail={candidate.email!}
+      candidateEmail={candidate.email}
     />
   );
 }

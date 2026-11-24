@@ -166,7 +166,7 @@ export async function createCandidateSession({
     verified: false,
   };
 
-  await redis.set(sessionKey(sessionId), JSON.stringify(data), {
+  await redis.set(sessionKey(sessionId), data, {
     ex: SESSION_TTL_SECONDS,
   });
 
@@ -174,19 +174,40 @@ export async function createCandidateSession({
 }
 
 // 2. Get candidate session
+
 export async function getCandidateSession(
   sessionId: string,
 ): Promise<CandidateSessionData | null> {
-  const raw: unknown = await redis.get(sessionKey(sessionId));
-
-  // Redis value must be a string before JSON.parse
-  if (typeof raw !== "string") {
-    return null;
-  }
-
   try {
-    return JSON.parse(raw) as CandidateSessionData;
-  } catch {
+    const raw = await redis.get<CandidateSessionData | string>(
+      sessionKey(sessionId),
+    );
+
+    if (!raw) {
+      console.log("[REDIS] Session not found:", sessionId);
+      return null;
+    }
+
+    // Upstash may already have deserialized the JSON.
+    const data: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !("widgetId" in data) ||
+      !("companyId" in data) ||
+      !("jobId" in data) ||
+      !("verified" in data)
+    ) {
+      console.error("[REDIS] Invalid candidate session:", sessionId);
+      return null;
+    }
+
+    console.log("[REDIS] Session successfully retrieved:", sessionId);
+
+    return data as CandidateSessionData;
+  } catch (error) {
+    console.error("[REDIS] Session retrieval error:", error);
     return null;
   }
 }
@@ -212,7 +233,7 @@ export async function markCandidateSessionVerified(
     verified: true,
   };
 
-  await redis.set(sessionKey(sessionId), JSON.stringify(updated), {
+  await redis.set(sessionKey(sessionId), updated, {
     ex: SESSION_TTL_SECONDS,
   });
 
@@ -249,7 +270,7 @@ export async function issueBridgeToken(
     bridgeIssued: true,
   };
 
-  await redis.set(sessionKey(sessionId), JSON.stringify(updated), {
+  await redis.set(sessionKey(sessionId), updated, {
     ex: SESSION_TTL_SECONDS,
   });
 
