@@ -3,118 +3,198 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { AlertCircle, Inbox } from "lucide-react";
+
 interface Job {
   id: string;
   title: string;
   description: string;
 }
 
-interface JobsResponse {
-  success: boolean;
-  jobs: Job[];
-}
-
-function WidgetJobs() {
-  const searchParams = useSearchParams();
+// Component that uses useSearchParams()
+function JobsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const widgetId = searchParams.get("widgetId");
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+  // Fetch jobs using widgetId
   useEffect(() => {
     if (!widgetId) {
-      setError("Widget ID is missing");
+      setError("Missing widget information.");
       setLoading(false);
       return;
     }
 
-    const fetchJobs = async () => {
+    async function loadJobs() {
       try {
-        setLoading(true);
-        setError("");
-
-        const response = await fetch(
-          `/embedding/api/widget/job?widgetId=${encodeURIComponent(widgetId)}`,
+        const res = await fetch(
+          `/embedding/api/widget/job?widgetId=${encodeURIComponent(widgetId!)}`,
         );
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch jobs");
-        }
+        const data = await res.json();
 
-        const data: JobsResponse = await response.json();
-
-        if (!data.success) {
-          throw new Error("Unable to load jobs");
+        if (!res.ok || !data.success) {
+          setError(data.message ?? "Could not load jobs.");
+          return;
         }
 
         setJobs(data.jobs);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+      } catch {
+        setError("Something went wrong. Please try again.");
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    fetchJobs();
+    loadJobs();
   }, [widgetId]);
 
-  if (loading) {
-    return <div className="p-6 text-center">Loading jobs...</div>;
-  }
-
-  if (error) {
-    return <div className="p-6 text-red-500">{error}</div>;
-  }
+  // Navigate to application page
   function selectJob(jobId: string) {
     router.push(
       `/embeddingwidget/auth?widgetId=${encodeURIComponent(widgetId!)}&jobId=${encodeURIComponent(jobId)}`,
     );
   }
 
+  // Expand or collapse job description
+  function toggleExpanded(jobId: string) {
+    setExpanded((prev) => ({
+      ...prev,
+      [jobId]: !prev[jobId],
+    }));
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="mb-6 text-2xl font-bold text-gray-900">
-          Available Jobs
-        </h1>
+    <div className="mx-auto max-w-2xl p-6 font-sans">
+      <h1 className="mb-5 text-xl font-bold text-foreground">Open Roles</h1>
 
-        {jobs.length === 0 ? (
-          <p className="text-gray-500">No jobs available.</p>
-        ) : (
-          <div className="space-y-4">
-            {jobs.map((job) => (
-              <div
-                key={job.id}
-                className="rounded-xl border bg-white p-5 shadow-sm relative"
-              >
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {job.title}
-                </h2>
+      {/* Loading state */}
+      {loading && (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-5 w-1/2" />
+              </CardHeader>
 
-                <p className="mt-2 text-gray-600">{job.description}</p>
-                <div className="flex justify-end mt-2">
-                  <button
+              <CardContent>
+                <Skeleton className="mb-2 h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Error state */}
+      {!loading && error && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && jobs.length === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+          <Inbox className="h-8 w-8" />
+
+          <p className="text-sm">No open roles right now.</p>
+        </div>
+      )}
+
+      {/* Jobs list */}
+      {!loading && !error && jobs.length > 0 && (
+        <div className="space-y-4">
+          {jobs.map((job) => {
+            const isExpanded = !!expanded[job.id];
+
+            return (
+              <Card key={job.id}>
+                <CardHeader>
+                  <h2 className="text-base font-semibold text-foreground">
+                    {job.title}
+                  </h2>
+                </CardHeader>
+
+                <CardContent>
+                  <p
+                    className={`text-sm text-muted-foreground ${
+                      isExpanded ? "" : "line-clamp-2"
+                    }`}
+                  >
+                    {job.description}
+                  </p>
+
+                  {/* Read more / Show less */}
+                  {job.description.length > 100 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(job.id)}
+                      className="mt-1 text-sm font-medium text-primary hover:underline"
+                    >
+                      {isExpanded ? "Show less" : "Read more"}
+                    </button>
+                  )}
+                </CardContent>
+
+                <CardFooter>
+                  <Button
                     onClick={() => selectJob(job.id)}
-                    className="w-25 sm:w-auto cursor-pointer bg-blue-500 p-2 rounded-xl"
+                    className="w-full cursor-pointer sm:w-auto"
                   >
                     Apply Now
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-export default function Page() {
+// Parent component with Suspense boundary
+export default function JobsPage() {
   return (
-    <Suspense fallback={<div className="p-6">Loading widget...</div>}>
-      <WidgetJobs />
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-2xl space-y-4 p-6">
+          <h1 className="text-xl font-bold">Open Roles</h1>
+
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-5 w-1/2" />
+              </CardHeader>
+
+              <CardContent>
+                <Skeleton className="mb-2 h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      }
+    >
+      <JobsContent />
     </Suspense>
   );
 }
