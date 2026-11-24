@@ -48,7 +48,7 @@ export default async function CompletePage({
       companyId,
       email: session.candidate.email,
       googleSub: session.candidate.googleSub,
-      name: session.candidate.name ?? null,
+      name: session.candidate.name ?? session.candidate.email,
       image: session.candidate.image ?? null,
     },
   });

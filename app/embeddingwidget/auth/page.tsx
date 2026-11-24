@@ -14,6 +14,8 @@ import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 type AuthStatus = "idle" | "waiting" | "success";
 
 export default function EmbeddedAuthPage() {
+  const hireyourway = import.meta.env.VITE_HIREYOURWAY;
+  console.log("HireYourWay URL:", hireyourway);
   const router = useRouter();
   const searchParams = useSearchParams();
   const widgetId = searchParams.get("widgetId");
@@ -56,7 +58,7 @@ export default function EmbeddedAuthPage() {
   // 2. Listen for the popup's postMessage reply
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.origin !== import.meta.env.VITE_HIRE_YOUR_WAY) return;
+      if (event.origin !== process.env.NEXT_PUBLIC_HIRE_YOUR_WAY) return;
       if (event.data?.type !== "HIREYOURWAY_AUTH_SUCCESS") return;
       if (event.data.widgetId !== widgetId) return;
 
@@ -83,17 +85,29 @@ export default function EmbeddedAuthPage() {
 
     setAuthStatus("waiting");
 
+    const baseUrl = process.env.NEXT_PUBLIC_HIRE_YOUR_WAY;
+
+    if (!baseUrl) {
+      console.error("VITE_HIREYOURWAY is missing");
+      setAuthStatus("idle");
+      return;
+    }
+
+    const authUrl = new URL("/api/candidate-auth", baseUrl);
+
+    authUrl.searchParams.set("widgetId", widgetId);
+    authUrl.searchParams.set("sessionId", sessionId);
+
     popupRef.current = window.open(
-      `/candidate-auth?widgetId=${encodeURIComponent(widgetId)}&sessionId=${encodeURIComponent(sessionId)}`,
+      authUrl.toString(),
       "hireyourway-auth",
       "popup,width=480,height=640",
     );
 
-    // If the user closes the popup without completing sign-in, don't leave
-    // them stuck on "One moment please..." forever - reset back to idle.
     pollRef.current = setInterval(() => {
       if (popupRef.current?.closed) {
         clearInterval(pollRef.current!);
+
         setAuthStatus((current) => (current === "success" ? current : "idle"));
       }
     }, 500);
