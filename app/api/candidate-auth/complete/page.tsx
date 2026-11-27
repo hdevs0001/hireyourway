@@ -1,11 +1,13 @@
+import { auth } from "@/lib/auth.candidate";
 
-import { auth } from "@/FormAuth/auth";
 import {
   getCandidateSession,
   markCandidateSessionVerified,
   issueBridgeToken,
 } from "@/lib/candidatesession/file";
+
 import { prisma } from "@/lib/prisma";
+
 import { CompleteClient } from "./complete-client";
 
 export const instant = false;
@@ -20,6 +22,7 @@ export default async function CompletePage({
 }) {
   const { widgetId, sessionId } = await searchParams;
 
+  // 1. Validate URL parameters
   if (!widgetId || !sessionId) {
     return (
       <p style={{ padding: 24 }}>
@@ -28,61 +31,47 @@ export default async function CompletePage({
     );
   }
 
-  // 1. Get authenticated Google user
-const session = await auth();
-const user = session?.user;
+  // 2. Get CandidateAuth session
+  const authSession = await auth();
 
-const candidateEmail = user?.email;
+  const identity = authSession?.candidate;
 
-if (!user || !candidateEmail) {
-  return (
-    <p style={{ padding: 24 }}>
-      Authentication failed. You can close this window.
-    </p>
-  );
-}
-
-  // 2. Retrieve Google account information
-  const googleAccount = await prisma.account.findFirst({
-    where: {
-      provider: "google",
-      user: {
-        is: {
-          email: candidateEmail,
-        },
-      },
-    },
-    select: {
-      providerAccountId: true,
-    },
-  });
-
-  if (!googleAccount) {
+  if (!identity?.email || !identity?.googleSub) {
     return (
       <p style={{ padding: 24 }}>
-        Google account information not found. Please sign in again.
+        Authentication failed.
+        Please sign in again and close this window.
       </p>
     );
   }
 
-  const googleSub = googleAccount.providerAccountId;
+  const candidateEmail = identity.email;
+  const googleSub = identity.googleSub;
 
-  // 3. Retrieve Redis candidate session
-const redisSession = await getCandidateSession(sessionId);
+  // 3. Retrieve the Redis candidate session
+  const redisSession = await getCandidateSession(sessionId);
 
-console.log("REDIS SESSION DEBUG:", {
-  sessionId,
-  redisSession,
-  found: !!redisSession,
-});
+  if (!redisSession) {
+    return (
+      <p style={{ padding: 24 }}>
+        Your application session expired.
+        Please try again.
+      </p>
+    );
+  }
 
-if (!redisSession) {
-  return <p>Redis session not found.</p>;
-}
+  // 4. Verify this session belongs to the requested widget
+  if (redisSession.widgetId !== widgetId) {
+    return (
+      <p style={{ padding: 24 }}>
+        Invalid application session.
+      </p>
+    );
+  }
 
   const { companyId } = redisSession;
 
-  // 4. Create or update candidate
+  // 5. Create or update candidate
   const candidate = await prisma.candidate.upsert({
     where: {
       companyId_email: {
@@ -90,49 +79,54 @@ if (!redisSession) {
         email: candidateEmail,
       },
     },
+
     update: {
       googleSub,
-      name: user.name ?? candidateEmail,
-      image: user.image ?? null,
+      name: identity.name ?? candidateEmail,
+      image: identity.image ?? null,
     },
+
     create: {
       companyId,
       email: candidateEmail,
       googleSub,
-      name: user.name ?? candidateEmail,
-      image: user.image ?? null,
+      name: identity.name ?? candidateEmail,
+      image: identity.image ?? null,
     },
   });
 
-  // 5. Mark Redis session as verified
-const updated = await markCandidateSessionVerified(sessionId, {
-  candidateId: candidate.id,
-  googleSub,
-  email: candidateEmail,
-});
+  // 6. Mark Redis session verified
+  const updated = await markCandidateSessionVerified(
+    sessionId,
+    {
+      candidateId: candidate.id,
+      googleSub,
+      email: candidateEmail,
+    },
+  );
 
-console.log("REDIS VERIFICATION DEBUG:", {
-  sessionId,
-  updated,
-});
+  if (!updated) {
+    return (
+      <p style={{ padding: 24 }}>
+        Could not verify your application session.
+        Please try again.
+      </p>
+    );
+  }
 
-if (!updated) {
-  return <p>Redis verification failed.</p>;
-}
-
-  // 6. Generate bridge token
+  // 7. Generate one-time bridge token
   const bridgeToken = await issueBridgeToken(sessionId);
 
   if (!bridgeToken) {
     return (
       <p style={{ padding: 24 }}>
         This sign-in link has already been used.
-        Please close this window and try again.
+        Please restart your application.
       </p>
     );
   }
 
-  // 7. Render completion client
+  // 8. Send authentication back to the widget popup
   return (
     <CompleteClient
       widgetId={widgetId}

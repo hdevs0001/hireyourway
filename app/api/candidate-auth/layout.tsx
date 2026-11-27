@@ -1,4 +1,3 @@
-// app/candidate-auth/layout.tsx
 import { SessionProvider } from "next-auth/react";
 
 export default function CandidateAuthLayout({
@@ -7,6 +6,8 @@ export default function CandidateAuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <SessionProvider basePath="/api/form-auth">{children}</SessionProvider>
+    <SessionProvider basePath="/api/candidate-auth">
+      {children}
+    </SessionProvider>
   );
 }
