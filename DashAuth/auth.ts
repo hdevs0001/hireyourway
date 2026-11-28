@@ -25,5 +25,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     ],
 
     cookies: authCookies("dash-auth"),
+
+    events: {
+      // Runs after Auth.js decides WHICH user is being signed in
+      async signIn({ user, account, profile, isNewUser }) {
+        console.log("[dash-auth] signIn", {
+          googleReturnedEmail: profile?.email,
+          dbUserEmail: user.email,
+          googleSub: account?.providerAccountId,
+          isNewUser,
+        });
+      },
+      // Fires only when a Google account gets attached to an EXISTING user
+      async linkAccount({ user, account, profile }) {
+        console.log("[dash-auth] LINKED", {
+          googleReturnedEmail: profile?.email,
+          linkedToExistingUser: user.email,
+          googleSub: account.providerAccountId,
+        });
+      },
+    },
   };
 });

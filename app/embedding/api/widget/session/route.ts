@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     const sessionId = await createCandidateSession({
-      widgetId: widget.id,
+      widgetId,
       companyId: widget.companyId,
       jobId: job.id,
     });
