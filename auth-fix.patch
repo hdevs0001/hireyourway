@@ -1,0 +1,307 @@
+diff --git a/DashAuth/auth.ts b/DashAuth/auth.ts
+index facd448..9f5ade4 100644
+--- a/DashAuth/auth.ts
++++ b/DashAuth/auth.ts
+@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
+ import NeonAdapter from "@auth/neon-adapter";
+ import { Pool } from "@neondatabase/serverless";
+ import Google from "next-auth/providers/google";
++import { authCookies } from "@/lib/auth-cookies";
+ 
+ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
+   const pool = new Pool({
+@@ -23,16 +24,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
+       }),
+     ],
+ 
+-    cookies: {
+-      sessionToken: {
+-        name: "dash-auth.session-token",
+-        options: {
+-          httpOnly: true,
+-          sameSite: "lax",
+-          path: "/",
+-          secure: process.env.NODE_ENV === "production",
+-        },
+-      },
+-    },
++    // Every cookie (session, csrf, callback-url, state, pkce, nonce) gets this
++    // instance's own prefix so it can never collide with the other auth instances.
++    cookies: authCookies("dash-auth"),
+   };
+ });
+\ No newline at end of file
+diff --git a/FormAuth/auth.ts b/FormAuth/auth.ts
+index efe0e3c..5422ba2 100644
+--- a/FormAuth/auth.ts
++++ b/FormAuth/auth.ts
+@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
+ import NeonAdapter from "@auth/neon-adapter";
+ import { Pool } from "@neondatabase/serverless";
+ import Google from "next-auth/providers/google";
++import { authCookies } from "@/lib/auth-cookies";
+ 
+ // *DO NOT* create a `Pool` here, outside the request handler.
+ 
+@@ -25,16 +26,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
+       }),
+     ],
+ 
+-    cookies: {
+-      sessionToken: {
+-        name: "form-auth.session-token",
+-        options: {
+-          httpOnly: true,
+-          sameSite: "lax",
+-          path: "/",
+-          secure: process.env.NODE_ENV === "production",
+-        },
+-      },
+-    },
++    // Every cookie (session, csrf, callback-url, state, pkce, nonce) gets this
++    // instance's own prefix so it can never collide with the other auth instances.
++    cookies: authCookies("form-auth"),
+   };
+ });
+diff --git a/app/api/candidate-auth/complete/complete-client.tsx b/app/api/candidate-auth/complete/complete-client.tsx
+index 0f5a272..0c2a298 100644
+--- a/app/api/candidate-auth/complete/complete-client.tsx
++++ b/app/api/candidate-auth/complete/complete-client.tsx
+@@ -1,6 +1,7 @@
+ "use client"
+ 
+ import { useEffect } from "react"
++import { signOut } from "next-auth/react"
+ 
+ export function CompleteClient({
+   widgetId,
+@@ -16,8 +17,14 @@ export function CompleteClient({
+       { type: "HIREYOURWAY_AUTH_SUCCESS", widgetId, bridgeToken, candidateEmail },
+       window.location.origin
+     )
+-    window.close()
++
++    // The identity now lives in the Redis session + bridge token, so the
++    // candidate cookie is no longer needed. Clearing it guarantees the next
++    // sign-in (e.g. with a different email) starts from a clean slate.
++    signOut({ redirect: false })
++      .catch(() => {})
++      .finally(() => window.close())
+   }, [widgetId, bridgeToken, candidateEmail])
+ 
+   return <p style={{ padding: 24 }}>Signed in — you can close this window.</p>
+-}
+\ No newline at end of file
++}
+diff --git a/app/api/candidate-auth/page.tsx b/app/api/candidate-auth/page.tsx
+index 5e8ad70..4873bfb 100644
+--- a/app/api/candidate-auth/page.tsx
++++ b/app/api/candidate-auth/page.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { Suspense, useEffect } from "react";
+ import { useSearchParams } from "next/navigation";
+-import { signIn } from "next-auth/react";
++import { signIn, signOut } from "next-auth/react";
+ 
+ function CandidateAuthContent() {
+   const searchParams = useSearchParams();
+@@ -13,9 +13,29 @@ function CandidateAuthContent() {
+   useEffect(() => {
+     if (!widgetId || !sessionId) return;
+ 
+-    signIn("google", {
+-      callbackUrl: `/api/candidate-auth/complete?widgetId=${encodeURIComponent(widgetId)}&sessionId=${encodeURIComponent(sessionId)}`,
+-    });
++    let cancelled = false;
++
++    async function start() {
++      // Drop any candidate session left over from a previous attempt, so the
++      // new Google sign-in can never be mistaken for the earlier email.
++      try {
++        await signOut({ redirect: false });
++      } catch {
++        // no existing session — nothing to clear
++      }
++
++      if (cancelled) return;
++
++      await signIn("google", {
++        callbackUrl: `/api/candidate-auth/complete?widgetId=${encodeURIComponent(widgetId!)}&sessionId=${encodeURIComponent(sessionId!)}`,
++      });
++    }
++
++    start();
++
++    return () => {
++      cancelled = true;
++    };
+   }, [widgetId, sessionId]);
+ 
+   if (!widgetId || !sessionId) {
+diff --git a/app/embeddingwidget/auth/page.tsx b/app/embeddingwidget/auth/page.tsx
+index 51420ed..e718b0b 100644
+--- a/app/embeddingwidget/auth/page.tsx
++++ b/app/embeddingwidget/auth/page.tsx
+@@ -33,6 +33,9 @@ function EmbeddedAuthContent() {
+ 
+   const [error, setError] = useState<string | null>(null);
+ 
++  // Bumped to force a brand-new pre-auth session (used by "Use a different account")
++  const [sessionNonce, setSessionNonce] = useState(0);
++
+   const [authStatus, setAuthStatus] = useState<AuthStatus>("idle");
+ 
+   const popupRef = useRef<Window | null>(null);
+@@ -88,7 +91,7 @@ function EmbeddedAuthContent() {
+     return () => {
+       cancelled = true;
+     };
+-  }, [widgetId, jobId]);
++  }, [widgetId, jobId, sessionNonce]);
+ 
+   // 2. Listen for successful authentication from popup
+   useEffect(() => {
+@@ -203,6 +206,24 @@ function EmbeddedAuthContent() {
+     }, 500);
+   }
+ 
++  // Switch to a different Google account.
++  // The previous Redis session is already verified for the first email (and
++  // its bridge token issued), so it must not be reused: forget everything and
++  // create a fresh session for the next sign-in.
++  function switchAccount() {
++    if (pollRef.current) {
++      clearInterval(pollRef.current);
++      pollRef.current = null;
++    }
++
++    setBridgeToken(null);
++    setCandidateEmail(null);
++    setSessionId(null);
++    setError(null);
++    setAuthStatus("idle");
++    setSessionNonce((n) => n + 1);
++  }
++
+   // 5. Continue to application form
+   function continueToForm() {
+     if (!bridgeToken || !widgetId) {
+@@ -254,13 +275,21 @@ function EmbeddedAuthContent() {
+               </p>
+             </CardContent>
+ 
+-            <CardFooter>
++            <CardFooter className="flex flex-col gap-2">
+               <Button
+                 onClick={continueToForm}
+                 className="w-full"
+               >
+                 Continue to application
+               </Button>
++
++              <Button
++                variant="ghost"
++                onClick={switchAccount}
++                className="w-full"
++              >
++                Use a different account
++              </Button>
+             </CardFooter>
+           </>
+         ) : authStatus === "waiting" ? (
+diff --git a/lib/auth-cookies.ts b/lib/auth-cookies.ts
+new file mode 100644
+index 0000000..bec2fb3
+--- /dev/null
++++ b/lib/auth-cookies.ts
+@@ -0,0 +1,37 @@
++// lib/auth-cookies.ts
++//
++// Auth.js stores several cookies per sign-in flow: the session token, the
++// CSRF token, the callback URL, and the OAuth state / PKCE / nonce values.
++//
++// Previously only `sessionToken` was renamed per Auth.js instance. Every other
++// cookie kept its default name (`authjs.callback-url`, `authjs.csrf-token`,
++// `authjs.state`, `authjs.pkce.code_verifier`, ...), so the dashboard, form and
++// candidate instances all read and overwrote EACH OTHER'S cookies on the same
++// origin. That is what made the "separate" auth instances behave as one.
++//
++// Giving every instance its own prefix isolates the whole flow.
++
++import type { NextAuthConfig } from "next-auth";
++
++const isProd = process.env.NODE_ENV === "production";
++const securePrefix = isProd ? "__Secure-" : "";
++
++export function authCookies(prefix: string): NonNullable<NextAuthConfig["cookies"]> {
++  const options = {
++    httpOnly: true,
++    sameSite: "lax" as const,
++    path: "/",
++    secure: isProd,
++  };
++
++  const name = (suffix: string) => `${securePrefix}${prefix}.${suffix}`;
++
++  return {
++    sessionToken: { name: name("session-token"), options },
++    callbackUrl: { name: name("callback-url"), options },
++    csrfToken: { name: name("csrf-token"), options },
++    pkceCodeVerifier: { name: name("pkce.code_verifier"), options },
++    state: { name: name("state"), options },
++    nonce: { name: name("nonce"), options },
++  };
++}
+diff --git a/lib/auth.candidate.ts b/lib/auth.candidate.ts
+index 306472a..226a0a5 100644
+--- a/lib/auth.candidate.ts
++++ b/lib/auth.candidate.ts
+@@ -1,6 +1,7 @@
+ // lib/auth.candidate.ts
+ import NextAuth from "next-auth";
+ import Google from "next-auth/providers/google";
++import { authCookies } from "./auth-cookies";
+ 
+ // ── Type augmentation — must be in a file TS definitely compiles ───────────
+ declare module "next-auth" {
+@@ -44,27 +45,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
+   // has no way to know those at sign-in time, so we skip it here entirely.
+   session: { strategy: "jwt" },
+ 
+-  cookies: {
+-    sessionToken: {
+-      name: "hireflow-candidate.session-token",
+-      options: {
+-        httpOnly: true,
+-        sameSite: "lax",
+-        path: "/",
+-        secure: process.env.NODE_ENV === "production",
+-      },
+-    },
+-  },
++  // Full isolated cookie set (session, csrf, callback-url, state, pkce, nonce).
++  cookies: authCookies("hireflow-candidate"),
+ 
+   callbacks: {
+-    // Runs once, right after Google confirms identity. We just carry the
+-    // raw profile fields into the JWT — no DB writes happen here.
++    // Runs right after Google confirms identity. On a fresh sign-in we REPLACE
++    // the whole token instead of mutating the old one, so nothing from a
++    // previous candidate (a different email picked earlier) can survive.
+     async jwt({ token, account, profile }) {
+       if (account && profile) {
+-        token.googleSub = profile.sub ?? undefined;
+-        token.email = profile.email;
+-        token.name = profile.name;
+-        token.picture = profile.picture;
++        return {
++          googleSub: profile.sub ?? undefined,
++          sub: profile.sub ?? undefined,
++          email: profile.email,
++          name: profile.name,
++          picture: profile.picture,
++        };
+       }
+       return token;
+     },

@@ -1,8 +1,13 @@
 "use server";
 
-import { signIn, signOut } from "./auth";
+import { auth, signIn, signOut } from "./auth";
 
 export async function formSignIn() {
+  const existing = await auth();
+  if (existing) {
+    await signOut({ redirect: false });
+  }
+
   await signIn("google", {
     redirectTo: "/form",
   });

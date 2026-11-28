@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import NeonAdapter from "@auth/neon-adapter";
 import { Pool } from "@neondatabase/serverless";
 import Google from "next-auth/providers/google";
+import { authCookies } from "@/lib/auth-cookies";
 
 export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const pool = new Pool({
@@ -23,16 +24,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       }),
     ],
 
-    cookies: {
-      sessionToken: {
-        name: "dash-auth.session-token",
-        options: {
-          httpOnly: true,
-          sameSite: "lax",
-          path: "/",
-          secure: process.env.NODE_ENV === "production",
-        },
-      },
-    },
+    cookies: authCookies("dash-auth"),
   };
 });

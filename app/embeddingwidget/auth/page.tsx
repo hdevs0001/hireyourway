@@ -33,6 +33,9 @@ function EmbeddedAuthContent() {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Bumped to force a brand-new pre-auth session ("Use a different account")
+  const [sessionNonce, setSessionNonce] = useState(0);
+
   const [authStatus, setAuthStatus] = useState<AuthStatus>("idle");
 
   const popupRef = useRef<Window | null>(null);
@@ -88,7 +91,7 @@ function EmbeddedAuthContent() {
     return () => {
       cancelled = true;
     };
-  }, [widgetId, jobId]);
+  }, [widgetId, jobId, sessionNonce]);
 
   // 2. Listen for successful authentication from popup
   useEffect(() => {
@@ -203,6 +206,24 @@ function EmbeddedAuthContent() {
     }, 500);
   }
 
+  // Switch to a different Google account.
+  // The previous Redis session is already verified for the first email (and
+  // its bridge token issued), so it must not be reused. Forget everything and
+  // create a fresh session for the next sign-in.
+  function switchAccount() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+
+    setBridgeToken(null);
+    setCandidateEmail(null);
+    setSessionId(null);
+    setError(null);
+    setAuthStatus("idle");
+    setSessionNonce((n) => n + 1);
+  }
+
   // 5. Continue to application form
   function continueToForm() {
     if (!bridgeToken || !widgetId) {
@@ -254,12 +275,20 @@ function EmbeddedAuthContent() {
               </p>
             </CardContent>
 
-            <CardFooter>
+            <CardFooter className="flex flex-col gap-2">
               <Button
                 onClick={continueToForm}
                 className="w-full"
               >
                 Continue to application
+              </Button>
+
+              <Button
+                variant="ghost"
+                onClick={switchAccount}
+                className="w-full"
+              >
+                Use a different account
               </Button>
             </CardFooter>
           </>
